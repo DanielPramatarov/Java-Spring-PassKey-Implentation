@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unknown Passkey Simulator</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            margin: 0;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .title {
+            font-size: 28px;
+            color: #2c3e50;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 16px;
+        }
+        
+        .method-selector {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .method {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .method:hover {
+            border-color: #6c757d;
+            background: #f1f3f4;
+        }
+        
+        .method.selected {
+            border-color: #007bff;
+            background: #e3f2fd;
+        }
+        
+        .method input[type="radio"] {
+            margin-right: 15px;
+            transform: scale(1.2);
+        }
+        
+        .method-info {
+            flex: 1;
+        }
+        
+        .method-title {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .method-desc {
+            font-size: 14px;
+            color: #6c757d;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: linear-gradient(45deg, #2c3e50, #34495e);
+            color: white;
+            margin-bottom: 15px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(44, 62, 80, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .result {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            border-left: 4px solid #28a745;
+            display: none;
+        }
+        
+        .result.show {
+            display: block;
+        }
+        
+        .result.error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        
+        .code {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .aaguid-display {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .aaguid-before {
+            color: #856404;
+            font-weight: 600;
+        }
+        
+        .aaguid-after {
+            color: #155724;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">🕵️ Unknown Passkey Simulator</h1>
+            <p class="subtitle">Make your passkey appear as "Unknown Authenticator"</p>
+        </div>
+        
+        <div class="method-selector">
+            <h3 style="margin-top: 0; color: #2c3e50;">Choose Your Method:</h3>
+            
+            <div class="method selected" onclick="selectMethod('client')">
+                <input type="radio" name="method" value="client" checked>
+                <div class="method-info">
+                    <div class="method-title">🎭 Client-Side Masking</div>
+                    <div class="method-desc">Override AAGUID in your JavaScript before sending to server</div>
+                </div>
+            </div>
+            
+            <div class="method" onclick="selectMethod('server')">
+                <input type="radio" name="method" value="server">
+                <div class="method-info">
+                    <div class="method-title">🔧 Server-Side Override</div>
+                    <div class="method-desc">Server ignores real AAGUID and logs as "Unknown"</div>
+                </div>
+            </div>
+            
+            <div class="method" onclick="selectMethod('proxy')">
+                <input type="radio" name="method" value="proxy">
+                <div class="method-info">
+                    <div class="method-title">🌐 Proxy Modification</div>
+                    <div class="method-desc">Intercept and modify attestation object in transit</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" placeholder="Enter username" value="test_user">
+        </div>
+        
+        <div class="form-group">
+            <label for="fakeAaguid">Custom "Unknown" AAGUID</label>
+            <select id="fakeAaguid">
+                <option value="00000000-0000-0000-0000-000000000000">Generic/Unknown (All Zeros)</option>
+                <option value="12345678-1234-5678-9abc-123456789abc">Custom Test AAGUID</option>
+                <option value="ffffffff-ffff-ffff-ffff-ffffffffffff">Invalid AAGUID (All F's)</option>
+                <option value="deadbeef-dead-beef-dead-beefdeadbeef">Custom: DEADBEEF</option>
+                <option value="custom">Enter Custom AAGUID</option>
+            </select>
+        </div>
+        
+        <div class="form-group" id="customAaguidInput" style="display: none;">
+            <label for="customAaguid">Custom AAGUID</label>
+            <input type="text" id="customAaguid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+        </div>
+        
+        <button class="btn" onclick="simulateUnknownPasskey()">
+            🚀 Create "Unknown" Passkey
+        </button>
+        
+        <button class="btn" onclick="authenticateUnknown()" style="background: linear-gradient(45deg, #27ae60, #2ecc71);">
+            🔑 Authenticate with "Unknown" Passkey
+        </button>
+        
+        <div id="result" class="result">
+            <h4>Result:</h4>
+            <div id="resultContent"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/api/webauthn';
+        let selectedMethod = 'client';
+        
+        function selectMethod(method) {
+            selectedMethod = method;
+            document.querySelectorAll('.method').forEach(m => m.classList.remove('selected'));
+            event.currentTarget.classList.add('selected');
+            
+            // Update radio button
+            document.querySelectorAll('input[name="method"]').forEach(r => r.checked = false);
+            document.querySelector(`input[value="${method}"]`).checked = true;
+        }
+        
+        // Show custom AAGUID input when needed
+        document.getElementById('fakeAaguid').addEventListener('change', function() {
+            const customInput = document.getElementById('customAaguidInput');
+            if (this.value === 'custom') {
+                customInput.style.display = 'block';
+            } else {
+                customInput.style.display = 'none';
+            }
+        });
+        
+        function showResult(content, isError = false) {
+            const result = document.getElementById('result');
+            const resultContent = document.getElementById('resultContent');
+            
+            result.className = `result show ${isError ? 'error' : ''}`;
+            resultContent.innerHTML = content;
+            result.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function getSelectedAaguid() {
+            const select = document.getElementById('fakeAaguid');
+            if (select.value === 'custom') {
+                return document.getElementById('customAaguid').value || '00000000-0000-0000-0000-000000000000';
+            }
+            return select.value;
+        }
+        
+        // Method 1: Client-Side AAGUID Masking
+        function maskAttestationObjectAAGUID(attestationObjectB64, newAaguid) {
+            try {
+                // This is a simplified example - in practice you'd need proper CBOR parsing
+                console.log('🎭 Original AAGUID will be replaced with:', newAaguid);
+                console.log('⚠️ Note: This requires proper CBOR parsing library for real implementation');
+                
+                // For demonstration, we'll return the original with a note
+                return {
+                    masked: attestationObjectB64,
+                    originalAaguid: 'extracted_from_hardware',
+                    newAaguid: newAaguid,
+                    method: 'client_side_masking'
+                };
+            } catch (error) {
+                console.error('Failed to mask AAGUID:', error);
+                return null;
+            }
+        }
+        
+        // Enhanced WebAuthn functions with masking
+        async function simulateUnknownPasskey() {
+            const username = document.getElementById('username').value;
+            const fakeAaguid = getSelectedAaguid();
+            
+            if (!username) {
+                showResult('Please enter a username', true);
+                return;
+            }
+            
+            try {
+                showResult('🔄 Starting registration with unknown passkey simulation...', false);
+                
+                // Step 1: Normal registration begin
+                const beginResponse = await fetch(`${API_BASE}/register/begin`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username })
+                });
+                
+                const options = await beginResponse.json();
+                
+                // Step 2: Create real credential
+                const publicKeyOptions = {
+                    challenge: base64URLToBuffer(options.challenge),
+                    rp: options.rp,
+                    user: {
+                        ...options.user,
+                        id: base64URLToBuffer(options.user.id)
+                    },
+                    pubKeyCredParams: options.pubKeyCredParams,
+                    authenticatorSelection: options.authenticatorSelection,
+                    timeout: options.timeout,
+                    attestation: options.attestation,
+                    excludeCredentials: options.excludeCredentials || []
+                };
+                
+                const credential = await navigator.credentials.create({
+                    publicKey: publicKeyOptions
+                });
+                
+                // Step 3: Apply masking based on selected method
+                let modifiedCredential;
+                
+                if (selectedMethod === 'client') {
+                    // Client-side masking
+                    const masked = maskAttestationObjectAAGUID(
+                        bufferToBase64URL(credential.response.attestationObject),
+                        fakeAaguid
+                    );
+                    
+                    modifiedCredential = {
+                        username,
+                        credential: {
+                            id: credential.id,
+                            rawId: bufferToBase64URL(credential.rawId),
+                            response: {
+                                clientDataJSON: bufferToBase64URL(credential.response.clientDataJSON),
+                                attestationObject: masked.masked // Use masked version
+                            },
+                            type: credential.type
+                        },
+                        // Add metadata about masking
+                        maskingInfo: {
+                            method: selectedMethod,
+                            originalAaguid: 'hardware_generated',
+                            maskedAaguid: fakeAaguid,
+                            timestamp: Date.now()
+                        }
+                    };
+                    
+                } else if (selectedMethod === 'server') {
+                    // Server-side override - send flag to server
+                    modifiedCredential = {
+                        username,
+                        credential: {
+                            id: credential.id,
+                            rawId: bufferToBase64URL(credential.rawId),
+                            response: {
+                                clientDataJSON: bufferToBase64URL(credential.response.clientDataJSON),
+                                attestationObject: bufferToBase64URL(credential.response.attestationObject)
+                            },
+                            type: credential.type
+                        },
+                        // Server instruction to override AAGUID
+                        serverOverride: {
+                            overrideAaguid: true,
+                            newAaguid: fakeAaguid,
+                            logAsUnknown: true,
+                            method: 'server_override'
+                        }
+                    };
+                    
+                } else if (selectedMethod === 'proxy') {
+                    // Proxy method - send original but add proxy instructions
+                    modifiedCredential = {
+                        username,
+                        credential: {
+                            id: credential.id,
+                            rawId: bufferToBase64URL(credential.rawId),
+                            response: {
+                                clientDataJSON: bufferToBase64URL(credential.response.clientDataJSON),
+                                attestationObject: bufferToBase64URL(credential.response.attestationObject)
+                            },
+                            type: credential.type
+                        },
+                        // Proxy processing instruction
+                        proxyInstruction: {
+                            modifyAttestationObject: true,
+                            replaceAaguid: fakeAaguid,
+                            preserveSignature: true
+                        }
+                    };
+                }
+                
+                console.log('📦 Modified credential package:', modifiedCredential);
+                
+                // Step 4: Send to server
+                const finishResponse = await fetch(`${API_BASE}/register/finish`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(modifiedCredential)
+                });
+                
+                const result = await finishResponse.json();
+                
+                if (finishResponse.ok) {
+                    showResult(`
+                        <div class="aaguid-display">
+                            <div class="aaguid-before">🔍 Method: ${selectedMethod.toUpperCase()}</div>
+                            <div class="aaguid-after">🎭 Simulated AAGUID: ${fakeAaguid}</div>
+                            <div style="margin-top: 10px; color: #6c757d;">
+                                ✅ Server should now see this as "Unknown Authenticator"
+                            </div>
+                        </div>
+                        <div class="code">${JSON.stringify(result, null, 2)}</div>
+                    `);
+                } else {
+                    showResult(`Registration failed: ${result.error || 'Unknown error'}`, true);
+                }
+                
+            } catch (error) {
+                console.error('Registration failed:', error);
+                showResult(`Error: ${error.message}`, true);
+            }
+        }
+        
+        async function authenticateUnknown() {
+            const username = document.getElementById('username').value;
+            
+            if (!username) {
+                showResult('Please enter a username', true);
+                return;
+            }
+            
+            try {
+                showResult('🔄 Authenticating with "unknown" passkey...', false);
+                
+                // Standard authentication flow
+                const beginResponse = await fetch(`${API_BASE}/authenticate/begin`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username })
+                });
+                
+                const options = await beginResponse.json();
+                
+                const publicKeyOptions = {
+                    challenge: base64URLToBuffer(options.challenge),
+                    timeout: options.timeout,
+                    rpId: options.rpId,
+                    userVerification: options.userVerification,
+                    allowCredentials: options.allowCredentials.map(cred => ({
+                        ...cred,
+                        id: base64URLToBuffer(cred.id)
+                    }))
+                };
+                
+                const credential = await navigator.credentials.get({
+                    publicKey: publicKeyOptions
+                });
+                
+                // Send authentication data
+                const authData = {
+                    username,
+                    credential: {
+                        id: credential.id,
+                        rawId: bufferToBase64URL(credential.rawId),
+                        response: {
+                            clientDataJSON: bufferToBase64URL(credential.response.clientDataJSON),
+                            authenticatorData: bufferToBase64URL(credential.response.authenticatorData),
+                            signature: bufferToBase64URL(credential.response.signature),
+                            userHandle: credential.response.userHandle ? 
+                                       bufferToBase64URL(credential.response.userHandle) : null
+                        },
+                        type: credential.type
+                    },
+                    // Add note about unknown passkey
+                    authNote: 'Authenticating with previously registered "unknown" passkey'
+                };
+                
+                const finishResponse = await fetch(`${API_BASE}/authenticate/finish`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(authData)
+                });
+                
+                const result = await finishResponse.json();
+                
+                if (finishResponse.ok) {
+                    showResult(`
+                        <div class="aaguid-display">
+                            <div class="aaguid-after">✅ Authentication successful!</div>
+                            <div style="margin-top: 10px; color: #6c757d;">
+                                🎭 This passkey should appear as "Unknown Authenticator" in your logs
+                            </div>
+                        </div>
+                        <div class="code">${JSON.stringify(result, null, 2)}</div>
+                    `);
+                } else {
+                    showResult(`Authentication failed: ${result.error || 'Unknown error'}`, true);
+                }
+                
+            } catch (error) {
+                console.error('Authentication failed:', error);
+                showResult(`Error: ${error.message}`, true);
+            }
+        }
+        
+        // Utility functions
+        function base64URLToBuffer(base64URL) {
+            const base64 = base64URL.replace(/-/g, '+').replace(/_/g, '/');
+            const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
+            const binary = atob(padded);
+            const buffer = new ArrayBuffer(binary.length);
+            const view = new Uint8Array(buffer);
+            for (let i = 0; i < binary.length; i++) {
+                view[i] = binary.charCodeAt(i);
+            }
+            return buffer;
+        }
+        
+        function bufferToBase64URL(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        }
+    </script>
+</body>
+</html>

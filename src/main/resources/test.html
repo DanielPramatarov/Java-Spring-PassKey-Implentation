@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Passkey Test Client</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; margin: 10px 0; cursor: pointer; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; width: 200px; }
+        .result { margin: 20px 0; padding: 10px; background: #f8f9fa; border-radius: 4px; }
+        .error { background: #f8d7da; color: #721c24; }
+        .success { background: #d4edda; color: #155724; }
+        .debug { background: #fff3cd; color: #856404; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+        .info { background: #d1ecf1; color: #0c5460; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Passkey Demo (Development Version)</h1>
+    
+    <div class="info">
+        <strong>Development Setup:</strong><br>
+        • For localhost development, WebAuthn should work with HTTP<br>
+        • If you get "insecure" errors, try accessing via <code>localhost</code> instead of <code>127.0.0.1</code><br>
+        • Or serve over HTTPS using a simple dev certificate
+    </div>
+    
+    <div>
+        <h2>Register</h2>
+        <input type="text" id="registerUsername" placeholder="Username" />
+        <button onclick="register()">Register with Passkey</button>
+    </div>
+    
+    <div>
+        <h2>Authenticate</h2>
+        <input type="text" id="authUsername" placeholder="Username" />
+        <button onclick="authenticate()">Login with Passkey</button>
+    </div>
+    
+    <div id="result" class="result" style="display: none;"></div>
+
+    <script>
+        // Use localhost instead of 127.0.0.1 for better WebAuthn compatibility
+        const API_BASE = 'http://localhost:8080/api/webauthn';
+        
+        // Check if WebAuthn is supported and warn about security context
+        function checkWebAuthnSupport() {
+            if (!window.PublicKeyCredential) {
+                showResult('WebAuthn is not supported in this browser', true);
+                return false;
+            }
+            
+            // Check for insecure context
+            if (location.protocol === 'file:') {
+                showResult('❌ File protocol detected. Please serve this HTML from a web server.\n' +
+                          'Try: python -m http.server 8000\n' +
+                          'Then visit: http://localhost:8000/your-file.html', true);
+                return false;
+            }
+            
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost' && !location.hostname.endsWith('.localhost')) {
+                showResult('❌ Insecure context. WebAuthn requires HTTPS or localhost.\n' +
+                          'Current: ' + location.protocol + '//' + location.hostname, true);
+                return false;
+            }
+            
+            // Additional check for secure context
+            if (!window.isSecureContext) {
+                showResult('❌ Not a secure context. Please use HTTPS or serve from localhost via web server.', true);
+                return false;
+            }
+            
+            showResult('✅ Secure context detected. WebAuthn should work!', false);
+            return true;
+        }
+        
+        function showResult(message, isError = false, isDebug = false) {
+            const result = document.getElementById('result');
+            result.textContent = message;
+            if (isDebug) {
+                result.className = 'result debug';
+            } else {
+                result.className = isError ? 'result error' : 'result success';
+            }
+            result.style.display = 'block';
+        }
+        
+        function base64URLToBuffer(base64URL) {
+            const base64 = base64URL.replace(/-/g, '+').replace(/_/g, '/');
+            const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
+            const binary = atob(padded);
+            const buffer = new ArrayBuffer(binary.length);
+            const view = new Uint8Array(buffer);
+            for (let i = 0; i < binary.length; i++) {
+                view[i] = binary.charCodeAt(i);
+            }
+            return buffer;
+        }
+        
+        function bufferToBase64URL(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        }
+        
+        async function register() {
+            if (!checkWebAuthnSupport()) return;
+            
+            try {
+                const username = document.getElementById('registerUsername').value;
+                if (!username) {
+                    showResult('Please enter a username', true);
+                    return;
+                }
+                
+                showResult('Starting registration...', false, true);
+                
+                // Begin registration
+                console.log('Sending request to:', `${API_BASE}/register/begin`);
+                const beginResponse = await fetch(`${API_BASE}/register/begin`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    body: JSON.stringify({ username })
+                });
+                
+                console.log('Response status:', beginResponse.status);
+                console.log('Response headers:', [...beginResponse.headers.entries()]);
+                
+                // Check if response is ok and has content
+                if (!beginResponse.ok) {
+                    const errorText = await beginResponse.text();
+                    showResult(`Server error (${beginResponse.status}): ${errorText}`, true, true);
+                    return;
+                }
+                
+                // Check content type
+                const contentType = beginResponse.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const responseText = await beginResponse.text();
+                    showResult(`Server returned non-JSON response (${contentType}): ${responseText}`, true, true);
+                    return;
+                }
+                
+                // Try to parse JSON
+                const responseText = await beginResponse.text();
+                console.log('Raw response:', responseText);
+                
+                if (!responseText.trim()) {
+                    showResult('Server returned empty response', true, true);
+                    return;
+                }
+                
+                let options;
+                try {
+                    options = JSON.parse(responseText);
+                } catch (parseError) {
+                    showResult(`JSON parse error: ${parseError.message}\nResponse: ${responseText}`, true, true);
+                    return;
+                }
+                
+                console.log('Parsed options:', options);
+                
+                // Convert base64url to buffers
+                options.challenge = base64URLToBuffer(options.challenge);
+                options.user.id = base64URLToBuffer(options.user.id);
+                
+                // Add excludeCredentials if missing
+                if (!options.excludeCredentials) {
+                    options.excludeCredentials = [];
+                }
+                
+                // For development, ensure the RP ID is set correctly
+                if (!options.rp) {
+                    options.rp = {};
+                }
+                if (!options.rp.id) {
+                    options.rp.id = location.hostname;
+                }
+                
+                console.log('Final options for WebAuthn:', options);
+                showResult('Creating credential...', false, true);
+                
+                // Create credential
+                const credential = await navigator.credentials.create({
+                    publicKey: options
+                });
+                
+                console.log('Credential created:', credential);
+                
+                // Prepare credential for server
+                const credentialData = {
+                    username,
+                    credential: {
+                        id: credential.id,
+                        rawId: bufferToBase64URL(credential.rawId),
+                        response: {
+                            clientDataJSON: bufferToBase64URL(credential.response.clientDataJSON),
+                            attestationObject: bufferToBase64URL(credential.response.attestationObject)
+                        },
+                        type: credential.type
+                    }
+                };
+                
+                showResult('Finishing registration...', false, true);
+                
+                // Finish registration
+                const finishResponse = await fetch(`${API_BASE}/register/finish`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    body: JSON.stringify(credentialData)
+                });
+                
+                console.log('Finish response status:', finishResponse.status);
+                
+                if (!finishResponse.ok) {
+                    const errorText = await finishResponse.text();
+                    showResult(`Registration finish failed (${finishResponse.status}): ${errorText}`, true, true);
+                    return;
+                }
+                
+                const finishText = await finishResponse.text();
+                const result = finishText ? JSON.parse(finishText) : {};
+                
+                showResult(`Registration successful for ${username}!`);
+                
+            } catch (error) {
+                console.error('Registration error:', error);
+                showResult(`Registration error: ${error.message}\nStack: ${error.stack}`, true, true);
+            }
+        }
+        
+        async function authenticate() {
+            if (!checkWebAuthnSupport()) return;
+            
+            try {
+                const username = document.getElementById('authUsername').value;
+                if (!username) {
+                    showResult('Please enter a username', true);
+                    return;
+                }
+                
+                showResult('Starting authentication...', false, true);
+                
+                // Begin authentication
+                const beginResponse = await fetch(`${API_BASE}/authenticate/begin`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    body: JSON.stringify({ username })
+                });
+                
+                console.log('Auth response status:', beginResponse.status);
+                
+                if (!beginResponse.ok) {
+                    const errorText = await beginResponse.text();
+                    showResult(`Authentication begin failed (${beginResponse.status}): ${errorText}`, true, true);
+                    return;
+                }
+                
+                const responseText = await beginResponse.text();
+                if (!responseText.trim()) {
+                    showResult('Server returned empty authentication response', true, true);
+                    return;
+                }
+                
+                const options = JSON.parse(responseText);
+                console.log('Auth options:', options);
+                
+                // Convert base64url to buffers
+                options.challenge = base64URLToBuffer(options.challenge);
+                options.allowCredentials = options.allowCredentials.map(cred => ({
+                    ...cred,
+                    id: base64URLToBuffer(cred.id)
+                }));
+                
+                // Ensure RP ID is set for development
+                if (!options.rpId) {
+                    options.rpId = location.hostname;
+                }
+                
+                showResult('Getting credential...', false, true);
+                
+                // Get credential
+                const credential = await navigator.credentials.get({
+                    publicKey: options
+                });
+                
+                // Prepare credential for server
+                const credentialData = {
+                    username,
+                    credential: {
+                        id: credential.id,
+                        rawId: bufferToBase64URL(credential.rawId),
+                        response: {
+                            clientDataJSON: bufferToBase64URL(credential.response.clientDataJSON),
+                            authenticatorData: bufferToBase64URL(credential.response.authenticatorData),
+                            signature: bufferToBase64URL(credential.response.signature),
+                            userHandle: credential.response.userHandle ? bufferToBase64URL(credential.response.userHandle) : null
+                        },
+                        type: credential.type
+                    }
+                };
+                
+                // Finish authentication
+                const finishResponse = await fetch(`${API_BASE}/authenticate/finish`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    body: JSON.stringify(credentialData)
+                });
+                
+                const finishText = await finishResponse.text();
+                const result = finishText ? JSON.parse(finishText) : {};
+                
+                if (finishResponse.ok) {
+                    showResult(`Authentication successful! Welcome ${result.user || username}!`);
+                } else {
+                    showResult(`Authentication failed: ${result.error || finishText}`, true, true);
+                }
+                
+            } catch (error) {
+                console.error('Authentication error:', error);
+                showResult(`Authentication error: ${error.message}`, true, true);
+            }
+        }
+        
+        // Check support on page load
+        window.addEventListener('load', () => {
+            if (!checkWebAuthnSupport()) {
+                document.querySelector('button').disabled = true;
+            }
+        });
+    </script>
+</body>
+</html>

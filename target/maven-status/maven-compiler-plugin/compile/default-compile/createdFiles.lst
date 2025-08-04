@@ -1,0 +1,7 @@
+com\example\webauthn4j\repository\AuthenticatorRepository.class
+com\example\webauthn4j\controller\WebAuthnController.class
+com\example\webauthn4j\entity\Authenticator.class
+com\example\webauthn4j\repository\UserRepository.class
+com\example\webauthn4j\config\SecurityConfig.class
+com\example\webauthn4j\entity\User.class
+com\example\webauthn4j\WebAuthn4JApplication.class
